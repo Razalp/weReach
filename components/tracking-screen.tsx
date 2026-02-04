@@ -1,10 +1,39 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Navigation, ShieldAlert } from "lucide-react";
+import { Navigation, ShieldAlert, Map as MapIcon, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef } from "react";
 import { playAlarmSound } from "@/lib/audio";
+import dynamic from "next/dynamic";
+
+// Leaflet specific imports for the visual tracking map
+// We import these dynamically or only use them inside the dynamic component to avoid SSR errors
+const MapBackground = dynamic(() => import("./map-background"), { ssr: false });
+const LeafletComponents = dynamic(async () => {
+    const { Marker, Polyline, useMap } = await import("react-leaflet");
+    const L = await import("leaflet");
+
+    const MapContent = ({ coords, target }: { coords: [number, number], target: [number, number] }) => {
+        const map = useMap();
+
+        useEffect(() => {
+            // Fit bounds to show both points
+            const bounds = L.latLngBounds([coords, target]);
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }, [coords, target, map]);
+
+        return (
+            <>
+                <Marker position={coords} />
+                <Marker position={target} />
+                <Polyline positions={[coords, target]} color="blue" dashArray="10, 10" />
+            </>
+        )
+    };
+    return Promise.resolve(MapContent);
+}, { ssr: false });
+
 
 interface TrackingScreenProps {
     destination: string;
@@ -36,7 +65,11 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
     const [currentDistance, setCurrentDistance] = useState<number | null>(null);
     const [speed, setSpeed] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [currentCoords, setCurrentCoords] = useState<[number, number] | null>(null);
     const watchIdRef = useRef<number | null>(null);
+
+    // Toggle between "Ring" view (default) and "Map" view
+    const [showMap, setShowMap] = useState(false);
 
     useEffect(() => {
         if (!targetCoords) {
@@ -51,6 +84,8 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
 
         const handlePosition = (position: GeolocationPosition) => {
             const { latitude, longitude, speed: currentSpeed } = position.coords;
+            setCurrentCoords([latitude, longitude]);
+
             const dist = calculateDistance(latitude, longitude, targetCoords[0], targetCoords[1]);
 
             setCurrentDistance(dist);
@@ -66,14 +101,11 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
 
         const handleError = (err: GeolocationPositionError) => {
             console.warn("GPS Error:", err);
-            // Don't show critical error immediately, maybe GPS is just warming up
             if (err.code === err.PERMISSION_DENIED) {
                 setError("Location permission denied. Please enable GPS.");
             }
         };
 
-        // Use watchPosition for real-time tracking
-        // enableHighAccuracy: true is crucial for precise distance alerts
         watchIdRef.current = navigator.geolocation.watchPosition(handlePosition, handleError, {
             enableHighAccuracy: true,
             timeout: 10000,
@@ -87,12 +119,6 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
         };
     }, [targetCoords, config.distance, onArrive]);
 
-    // Calculate progress ring (clamped between 0 and 100)
-    // We assume a 'start' distance of roughly current + 10km for visual context if we don't have a start point, 
-    // or just make it relative to the alert distance.
-    // Let's make the ring show "closeness" relative to a rough 50km outer bound or just dynamic.
-    // Better yet: make 100% = 0km, 0% = >20km or start distance.
-    // For simplicity: Max scale is 20km.
     const maxScale = 20;
     const progress = currentDistance
         ? Math.min(100, Math.max(0, ((maxScale - currentDistance) / (maxScale - config.distance)) * 100))
@@ -100,63 +126,82 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
 
     return (
         <div className="flex flex-col h-full w-full bg-black text-white relative overflow-hidden">
-            {/* Background Gradient */}
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-900 to-black pointer-events-none" />
+            {/* Background Gradient / Map */}
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-900 to-black pointer-events-none z-0" />
+
+            {showMap && targetCoords && currentCoords && (
+                <div className="absolute inset-0 z-0">
+                    <MapBackground center={currentCoords} zoom={13}>
+                        <LeafletComponents coords={currentCoords} target={targetCoords} />
+                    </MapBackground>
+                    {/* Overlay for HUD readability */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
+                </div>
+            )}
 
             {/* Top Bar */}
-            <div className="relative z-10 flex justify-between items-center p-6">
+            <div className="relative z-10 flex justify-between items-center p-6 bg-gradient-to-b from-black/50 to-transparent">
                 <div className="flex items-center gap-2 text-white/70">
                     <Navigation className="w-4 h-4 fill-current animate-pulse" />
-                    <span className="text-xs font-medium uppercase tracking-widest">GPS Active</span>
+                    {/* If map is shown, clicking this could center view? For now just static label */}
+                    <span className="text-xs font-medium uppercase tracking-widest">
+                        {showMap ? "Visual Tracking" : "GPS Active"}
+                    </span>
                 </div>
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={onCancel}
-                    className="rounded-full bg-white/10 hover:bg-white/20 text-white border-none h-8 px-4 text-xs"
-                >
-                    Cancel
-                </Button>
+
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowMap(!showMap)}
+                        className="rounded-full bg-white/10 hover:bg-white/20 text-white border-none h-8 w-8 p-0"
+                    >
+                        {showMap ? <RotateCcw className="w-4 h-4" /> : <MapIcon className="w-4 h-4" />}
+                    </Button>
+
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={onCancel}
+                        className="rounded-full bg-white/10 hover:bg-white/20 text-white border-none h-8 px-4 text-xs"
+                    >
+                        Cancel
+                    </Button>
+                </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 relative flex flex-col items-center justify-center p-8 z-10">
+            <div className={`flex-1 relative flex flex-col items-center justify-center p-8 z-10 transition-opacity duration-500 ${showMap ? 'opacity-90' : 'opacity-100'}`}>
 
-                {/* Ring */}
+                {/* Ring - Hide or shrink when map is active? 
+             User asked for "button for where we are and google map like that line".
+             We can keep the ring but maybe make it smaller or translucent if map is on.
+             Actually, keeping it overlayed is cool functionality (HUD style).
+        */}
                 <div className="relative w-64 h-64 flex items-center justify-center mb-12">
-                    {/* Pulsing effect */}
-                    <motion.div
-                        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.1, 0.3] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                        className="absolute inset-0 rounded-full bg-blue-500/20 blur-xl"
-                    />
+                    {!showMap && (
+                        <>
+                            <motion.div
+                                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.1, 0.3] }}
+                                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute inset-0 rounded-full bg-blue-500/20 blur-xl"
+                            />
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle cx="128" cy="128" r="120" stroke="currentColor" strokeWidth="2" fill="transparent" className="text-white/10" />
+                                <motion.circle
+                                    cx="128" cy="128" r="120" stroke={error ? "#ef4444" : "#3b82f6"} strokeWidth="4" fill="transparent"
+                                    strokeDasharray={2 * Math.PI * 120}
+                                    initial={{ strokeDashoffset: 2 * Math.PI * 120 }}
+                                    animate={{ strokeDashoffset: 2 * Math.PI * 120 * (1 - progress / 100) }}
+                                    strokeLinecap="round"
+                                    className="filter drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                />
+                            </svg>
+                        </>
+                    )}
 
-                    <svg className="w-full h-full transform -rotate-90">
-                        <circle
-                            cx="128"
-                            cy="128"
-                            r="120"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            fill="transparent"
-                            className="text-white/10"
-                        />
-                        <motion.circle
-                            cx="128"
-                            cy="128"
-                            r="120"
-                            stroke={error ? "#ef4444" : "#3b82f6"}
-                            strokeWidth="4"
-                            fill="transparent"
-                            strokeDasharray={2 * Math.PI * 120}
-                            initial={{ strokeDashoffset: 2 * Math.PI * 120 }}
-                            animate={{ strokeDashoffset: 2 * Math.PI * 120 * (1 - progress / 100) }}
-                            strokeLinecap="round"
-                            className="filter drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                        />
-                    </svg>
-
-                    <div className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform" onClick={() => playAlarmSound(1000)}>
+                    {/* Center Data - Always Visible but styled differently if map is on */}
+                    <div className={`absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform ${showMap ? 'bg-black/40 backdrop-blur-sm rounded-full w-48 h-48 m-auto border border-white/10' : ''}`} onClick={() => playAlarmSound(1000)}>
                         {error ? (
                             <div className="flex flex-col items-center text-red-500 gap-2">
                                 <ShieldAlert className="w-12 h-12" />
@@ -164,26 +209,26 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
                             </div>
                         ) : (
                             <>
-                                <span className="text-6xl font-light tracking-tighter font-mono">
+                                <span className="text-6xl font-light tracking-tighter font-mono drop-shadow-lg">
                                     {currentDistance !== null ? currentDistance.toFixed(2) : "--"}
                                 </span>
-                                <span className="text-sm text-blue-400 font-medium uppercase mt-2">Km Remaining</span>
-                                <span className="text-[10px] text-white/30 mt-1 uppercase tracking-widest">Click to Test Sound</span>
+                                <span className="text-sm text-blue-400 font-medium uppercase mt-2 drop-shadow-md">Km Remaining</span>
+                                <span className="text-[10px] text-white/50 mt-1 uppercase tracking-widest">Click to Test Sound</span>
                             </>
                         )}
                     </div>
                 </div>
 
-                <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-medium tracking-tight h-8 truncate max-w-[300px]">{destination}</h2>
-                    <p className="text-white/50 text-sm">
+                <div className="text-center space-y-2 pointer-events-none">
+                    <h2 className="text-2xl font-medium tracking-tight h-8 truncate max-w-[300px] drop-shadow-md">{destination}</h2>
+                    <p className="text-white/50 text-sm drop-shadow-md">
                         Alarm set for {config.distance} km mark
                     </p>
                 </div>
             </div>
 
             {/* GPS Data */}
-            <div className="p-6 relative z-10 grid grid-cols-2 gap-4 text-center border-t border-white/5">
+            <div className="p-6 relative z-10 grid grid-cols-2 gap-4 text-center border-t border-white/5 bg-black/40 backdrop-blur-md">
                 <div>
                     <div className="text-xs text-white/40 uppercase mb-1">Speed</div>
                     <div className="text-xl font-mono">{speed !== null ? Math.round(speed) : "--"} <span className="text-xs text-white/40">km/h</span></div>

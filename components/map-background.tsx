@@ -23,6 +23,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 interface MapBackgroundProps {
     center?: [number, number];
     zoom?: number;
+    children?: React.ReactNode;
 }
 
 function ChangeView({ center, zoom }: MapBackgroundProps) {
@@ -33,7 +34,7 @@ function ChangeView({ center, zoom }: MapBackgroundProps) {
     return null;
 }
 
-export default function MapBackground({ center = [48.8566, 2.3522], zoom = 13 }: MapBackgroundProps) {
+export default function MapBackground({ center = [48.8566, 2.3522], zoom = 13, children }: MapBackgroundProps) {
     return (
         <MapContainer
             center={center}
@@ -50,6 +51,7 @@ export default function MapBackground({ center = [48.8566, 2.3522], zoom = 13 }:
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             />
             <ChangeView center={center} zoom={zoom} />
+            {children}
         </MapContainer>
     );
 }
