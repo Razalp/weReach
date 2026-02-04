@@ -18,7 +18,7 @@ const MapBackground = dynamic(() => import("./map-background"), {
 });
 
 interface DestinationSearchProps {
-    onSelect: (destination: string) => void;
+    onSelect: (destination: string, coords: [number, number]) => void;
 }
 
 interface Suggestion {
@@ -85,7 +85,7 @@ export function DestinationSearch({ onSelect }: DestinationSearchProps) {
     };
 
     const handleConfirm = () => {
-        if (query) onSelect(query);
+        if (query) onSelect(query, coords);
     }
 
     return (

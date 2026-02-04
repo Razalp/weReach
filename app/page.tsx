@@ -12,10 +12,18 @@ type ViewState = "search" | "config" | "tracking" | "alert";
 export default function Home() {
   const [view, setView] = useState<ViewState>("search");
   const [destination, setDestination] = useState("");
+  const [destinationCoords, setDestinationCoords] = useState<[number, number] | null>(null);
   const [config, setConfig] = useState({ distance: 1, vibration: true, sound: true });
 
-  const handleDestinationSelect = (dest: string) => {
+  const handleDestinationSelect = (dest: string, coords: [number, number]) => {
     setDestination(dest);
+    setDestinationCoords(coords);
+
+    // Request notification permission if needed
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
     setView("config");
   };
 
@@ -74,6 +82,7 @@ export default function Home() {
           >
             <TrackingScreen
               destination={destination}
+              targetCoords={destinationCoords}
               config={config}
               onCancel={() => setView("search")}
               onArrive={handleArrival}
