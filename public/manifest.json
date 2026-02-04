@@ -1,0 +1,16 @@
+{
+    "name": "Wereach Destination Alert",
+    "short_name": "Wereach",
+    "description": "Wake up when you reach your destination.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#FAFAFA",
+    "icons": [
+        {
+            "src": "/icon.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
