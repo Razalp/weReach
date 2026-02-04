@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { BellOff, MapPin } from "lucide-react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 interface WakeUpAlertProps {
@@ -10,6 +11,49 @@ interface WakeUpAlertProps {
 }
 
 export function WakeUpAlert({ destination, onDismiss }: WakeUpAlertProps) {
+    useEffect(() => {
+        // Web Audio API context
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+
+        const ctx = new AudioContext();
+        let oscillator: OscillatorNode | null = null;
+        let gainNode: GainNode | null = null;
+        let isPlaying = true;
+
+        const playAlarm = () => {
+            if (!isPlaying) return;
+
+            oscillator = ctx.createOscillator();
+            gainNode = ctx.createGain();
+
+            oscillator.type = "square";
+            oscillator.frequency.setValueAtTime(880, ctx.currentTime); // A5
+            oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
+
+            gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            oscillator.start();
+            oscillator.stop(ctx.currentTime + 0.5);
+
+            // Repeat
+            setTimeout(playAlarm, 600);
+        };
+
+        playAlarm();
+
+        return () => {
+            isPlaying = false;
+            if (oscillator) oscillator.disconnect();
+            if (gainNode) gainNode.disconnect();
+            if (ctx.state !== 'closed') ctx.close();
+        };
+    }, []);
+
     return (
         <div className="flex flex-col h-full w-full bg-red-500 relative overflow-hidden items-center justify-between p-8">
             <motion.div
