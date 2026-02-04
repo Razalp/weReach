@@ -16,12 +16,21 @@ const LeafletComponents = dynamic(async () => {
 
     const MapContent = ({ coords, target }: { coords: [number, number], target: [number, number] }) => {
         const map = useMap();
+        const firstRun = useRef(true);
 
         useEffect(() => {
-            // Fit bounds to show both points
-            const bounds = L.latLngBounds([coords, target]);
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }, [coords, target, map]);
+            if (firstRun.current) {
+                // Fit bounds to show both points only initially
+                const bounds = L.latLngBounds([coords, target]);
+                map.fitBounds(bounds, { padding: [50, 50] });
+                // firstRun.current = false; // logic: if we want to track user, we might want to keep fitting bounds? 
+                // User asked for "scroll in scroll out", which implies they want control. 
+                // If we re-fit on every coord update, it fights the user.
+                // So let's only do it initially or if the specific "re-center" button is clicked (if we had one).
+                // For now, let's just do it when targets change significantly or on mount.
+                firstRun.current = false;
+            }
+        }, [target, map]); // Removed coords from dependency to prevent auto-pan fighting user scroll
 
         return (
             <>
@@ -130,12 +139,19 @@ export function TrackingScreen({ destination, targetCoords, config, onCancel, on
             <div className="absolute inset-0 bg-gradient-to-b from-slate-900 to-black pointer-events-none z-0" />
 
             {showMap && targetCoords && currentCoords && (
-                <div className="absolute inset-0 z-0">
-                    <MapBackground center={currentCoords} zoom={13}>
+                <div className="absolute inset-0 z-0 pointer-events-auto">
+                    <MapBackground
+                        center={currentCoords}
+                        zoom={13}
+                        scrollWheelZoom={true}
+                        doubleClickZoom={true}
+                        zoomControl={false} // Keep UI minimal, use pinch/scroll
+                        dragging={true}
+                    >
                         <LeafletComponents coords={currentCoords} target={targetCoords} />
                     </MapBackground>
-                    {/* Overlay for HUD readability */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
+                    {/* Overlay for HUD readability - reduced opacity to make map more visible when interacting */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
                 </div>
             )}
 

@@ -24,6 +24,10 @@ interface MapBackgroundProps {
     center?: [number, number];
     zoom?: number;
     children?: React.ReactNode;
+    scrollWheelZoom?: boolean;
+    zoomControl?: boolean;
+    dragging?: boolean;
+    doubleClickZoom?: boolean;
 }
 
 function ChangeView({ center, zoom }: MapBackgroundProps) {
@@ -34,17 +38,25 @@ function ChangeView({ center, zoom }: MapBackgroundProps) {
     return null;
 }
 
-export default function MapBackground({ center = [48.8566, 2.3522], zoom = 13, children }: MapBackgroundProps) {
+export default function MapBackground({
+    center = [48.8566, 2.3522],
+    zoom = 13,
+    children,
+    scrollWheelZoom = false,
+    zoomControl = false,
+    dragging = true, // Default to true as before
+    doubleClickZoom = false
+}: MapBackgroundProps) {
     return (
         <MapContainer
             center={center}
             zoom={zoom}
             style={{ height: "100%", width: "100%" }}
-            zoomControl={false}
+            zoomControl={zoomControl}
             attributionControl={false}
-            dragging={true}
-            doubleClickZoom={false}
-            scrollWheelZoom={false}
+            dragging={dragging}
+            doubleClickZoom={doubleClickZoom}
+            scrollWheelZoom={scrollWheelZoom}
         >
             <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
