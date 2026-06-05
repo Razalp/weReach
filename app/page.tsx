@@ -12,16 +12,32 @@ type ViewState = "search" | "config" | "tracking" | "alert";
 export default function Home() {
   const [view, setView] = useState<ViewState>("search");
   const [destination, setDestination] = useState("");
+  const [destinationAddress, setDestinationAddress] = useState("");
   const [destinationCoords, setDestinationCoords] = useState<[number, number] | null>(null);
   const [config, setConfig] = useState({ distance: 1, vibration: true, sound: true });
 
-  const handleDestinationSelect = (dest: string, coords: [number, number]) => {
+  const handleDestinationSelect = async (dest: string, coords: [number, number], address = "") => {
     setDestination(dest);
+    setDestinationAddress(address);
     setDestinationCoords(coords);
 
-    // Request notification permission if needed
-    if (Notification.permission === "default") {
+    if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
+    }
+
+    try {
+      await fetch("/api/destinations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: dest,
+          address,
+          latitude: coords[0],
+          longitude: coords[1],
+        }),
+      });
+    } catch (error) {
+      console.error("Could not save destination:", error);
     }
 
     setView("config");
@@ -39,6 +55,7 @@ export default function Home() {
   const handleDismiss = () => {
     setView("search");
     setDestination("");
+    setDestinationAddress("");
   };
 
   return (
@@ -66,6 +83,7 @@ export default function Home() {
           >
             <AlertConfig
               destination={destination}
+              address={destinationAddress}
               onStart={handleStartTracking}
               onBack={() => setView("search")}
             />
@@ -82,6 +100,7 @@ export default function Home() {
           >
             <TrackingScreen
               destination={destination}
+              address={destinationAddress}
               targetCoords={destinationCoords}
               config={config}
               onCancel={() => setView("search")}

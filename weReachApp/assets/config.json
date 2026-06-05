@@ -1,0 +1,4 @@
+{
+  "mapboxAccessToken": "YOUR_MAPBOX_PUBLIC_TOKEN_HERE",
+  "apiBaseUrl": "http://localhost:3000/api"
+}

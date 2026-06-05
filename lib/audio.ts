@@ -1,8 +1,11 @@
 export function playAlarmSound(durationMs: number = 2000) {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) return;
+    const AudioContextConstructor =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 
-    const ctx = new AudioContext();
+    if (!AudioContextConstructor) return;
+
+    const ctx = new AudioContextConstructor();
     let oscillator: OscillatorNode | null = null;
     let gainNode: GainNode | null = null;
     let isPlaying = true;
